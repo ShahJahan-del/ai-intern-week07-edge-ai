@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 # Import structure for PyTorch
-from export_onnx import FlexibleNet
+from pipeline_test.export_onnx import FlexibleNet
 
 def benchmark_pytorch(model, input_tensor, num_runs=1000):
     latencies = []

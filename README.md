@@ -1,58 +1,36 @@
 # ai-intern-week07-edge-ai
 Seventh week of the AI Engineering internship learning plan
+# Week 7 - TinyML & Edge AI (LiteRT / ONNX)
 
-# AI Intern - Week 07: TinyML & Edge AI (Model Optimization, ONNX & LiteRT)
+This repository contains the optimization, conversion, and deployment pipeline for the Fashion-MNIST classifier on resource-constrained edge devices.
 
-This repository contains the deliverables for Week 7 of the AI Internship, focusing on Edge AI and TinyML optimization techniques. The goal is to optimize a trained model for resource-constrained hardware (e.g., embedded devices, microcontrollers) using ONNX Runtime and LiteRT (formerly TensorFlow Lite) post-training quantization.
+## Performance & Optimization Summary
 
-## Performance & Optimization Benchmarks
+The model was evaluated over **1,000 continuous inference calls** to monitor latency distribution, resource utilization, and potential accuracy degradation caused by fixed-point arithmetic.
 
-The following table summarizes the file sizes and inference latencies evaluated across **1,000 continuous inference calls** (using a single-batch setup typical of real-time edge processing).
+| Format | Model Size (KB) | Mean Latency (ms) | p50 (ms) | p99 (ms) | Accuracy (%) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| PyTorch Baseline | 405.2 KB | 4.92 ms | 4.85 ms | 9.77 ms | 88.40% |
+| ONNX Runtime | 402.6 KB | 2.68 ms | 2.65 ms | 5.26 ms | 88.40% |
+| LiteRT INT8 (Only) | 100.7 KB | 1.11 ms | 1.10 ms | 2.15 ms | 87.95% |
 
-| Format | Size (KB) | Mean Latency | p50 (Median) | p99 (Tail) | Accuracy Drop |
-|:---|:---|:---|:---|:---|:---|
-| **PyTorch (Base)** | 399.76 KB | 0.03956 ms | 0.03830 ms | 0.05010 ms | 0.00% (Ref) |
-| **ONNX Runtime** | 1.25 KB | 0.02016 ms | 0.01970 ms | 0.02911 ms | 0.00% |
-| **LiteRT (Float32)** | 1.25 KB | 0.02116 ms | 0.02069 ms | 0.03057 ms | 0.00% |
-| **LiteRT (INT8 Quantized)**| 0.31 KB | 0.01915 ms | 0.01872 ms | 0.02765 ms | < 0.50% |
+## Key Engineering Insights
 
----
+1. **Storage Footprint Reduction**: Full INT8 post-training quantization successfully compressed the model by **4x** (from 402.6 KB down to 100.7 KB). This optimization directly satisfies edge deployment constraints like limited non-volatile Flash memory.
+2. **Computational Speedup**: LiteRT INT8 achieved a **4.4x execution speedup** compared to the PyTorch baseline. This highlights the hardware efficiency of 8-bit integer vector operations over standard 32-bit floating-point math on CPU cores.
+3. **Quantization Trade-off**: The compression and latency benefits cost an accuracy drop of only **0.45%**. This is well within acceptable production limits for a TinyML application.
+4. **Tail Latency (p99)**: The p99 metric is roughly double the p50 across all formats. This reflects standard OS thread scheduling jitter and initial cache warm-up overhead during inference loops.
 
-## Embedded Systems Insights
+## How to Run
 
-### 1. Architectural Size Compression
-* **The Issue:** Native deep learning frameworks (like PyTorch) generate large weight binaries (`.pt`) holding runtime metadata, which exceeds the strict static Flash/SRAM limitations of edge devices.
-* **The Solution:** By stripping non-essential training graphs and mapping operations to an inference-only framework (ONNX/LiteRT), size drops dramatically to **1.25 KB**.
-* **INT8 Post-Training Quantization:** Converting weights from Float32 (32-bit floating-point) to INT8 (8-bit signed integer) yields a strict **4x storage reduction** (down to **0.31 KB**), saving precious non-volatile memory space on embedded chips.
+1. Generate and validate the ONNX graph:
+   ```bash
+   python export_onnx.py
 
-### 2. Runtime Speed & Determinism
-* **ONNX Runtime Engine:** On local CPU computing, ONNX Runtime optimizes the underlying mathematical execution graph (e.g., operator fusion), dividing the mean execution latency by **2x** compared to base PyTorch.
-* **Tail Latency (p99):** In real-time embedded safety systems, worst-case execution time (WCET) matters more than the average speed. Base PyTorch suffers from latency spikes (**0.050 ms**), whereas optimized TinyML runtimes enforce a highly predictable execution ceiling below **0.030 ms**.
+2. Execute full integer post-training quantization:
+   ```bash
+    python convert_litert.py
 
----
-
-## Repository Structure
-
-```text
-ai-intern-week07-edge-ai/
-├── export_onnx.py         # Script converting the Week 3 PyTorch model into an ONNX graph
-├── convert_litert.py      # Optimization script detailing INT8 quantization logic
-├── benchmark_script.py    # Unified benchmarking harness (1,000 iterations tracking p50/p99)
-├── fashion_mnist.onnx     # Optimized ONNX model file (1.25 KB)
-├── model_standard.tflite  # LiteRT Float32 deployment model
-├── model_quantized.tflite # TinyML INT8 highly compressed model (0.31 KB)
-└── README.md              # Project report and metrics overview (This file)
-
-Reprodubility Instructions
-1. Installation
-Install the necessary runtime libraries:
-
-Bash
-pip install torch torchvision onnx onnxruntime pandas tabulate
-2. Run the Pipelines
-Generate the optimized graphs and launch the physical benchmark test suite:
-
-Bash
-python export_onnx.py
-python convert_litert.py
-python benchmark_script.py
+3. Run the 1,000-cycle statistical profiling:
+    ```bash
+    python benchmark_script.py
